@@ -49,6 +49,26 @@ STATUS_WEIGHTS = [15, 20, 50, 10, 5]
 s3 = boto3.client("s3", region_name=AWS_REGION)
 
 
+def corrupt_order(order):
+    """Deliberately break ~5% of orders to exercise the validation layer."""
+    if random.random() < 0.05:
+        corruption = random.choice([
+            "missing_field",
+            "negative_amount",
+            "bad_status",
+            "zero_quantity",
+        ])
+        if corruption == "missing_field":
+            order.pop("customer_id", None)
+        elif corruption == "negative_amount":
+            order["order_amount"] = -abs(order["order_amount"])
+        elif corruption == "bad_status":
+            order["status"] = "GHOST"
+        elif corruption == "zero_quantity":
+            order["quantity"] = 0
+    return order
+
+
 def generate_products():
     products = []
     for i in range(1, NUM_PRODUCTS + 1):
@@ -90,7 +110,7 @@ def generate_orders():
         unit_price = round(random.uniform(low, high), 2)
         order_ts = datetime.now(timezone.utc) - timedelta(days=random.randint(0, 30),
                                                            hours=random.randint(0, 23))
-        orders.append({
+        orders.append(corrupt_order({
             "order_id": str(uuid.uuid4()),
             "customer_id": f"user_{random.randint(1, NUM_CUSTOMERS)}",
             "product_id": f"prod_{random.randint(1, NUM_PRODUCTS)}",
@@ -100,7 +120,7 @@ def generate_orders():
             "order_amount": round(unit_price * qty, 2),
             "status": random.choices(ORDER_STATUSES, weights=STATUS_WEIGHTS, k=1)[0],
             "order_timestamp": order_ts.isoformat(),
-        })
+        }))
     return orders
 
 

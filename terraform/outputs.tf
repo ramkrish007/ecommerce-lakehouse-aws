@@ -16,3 +16,13 @@ output "gold_bucket" {
 output "aws_region" {
   value = var.aws_region
 }
+
+output "quarantine_queue_url" {
+  value       = aws_sqs_queue.quarantine.url
+  description = "SQS quarantine (DLQ) queue URL"
+}
+
+output "validate_lambda_name" {
+  value       = aws_lambda_function.validate.function_name
+  description = "Validation Lambda function name"
+}

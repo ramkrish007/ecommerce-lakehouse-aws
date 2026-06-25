@@ -48,7 +48,6 @@ BESTSELLERS = [f"prod_{i}" for i in range(1, 51)]
 
 def traffic_multiplier_for_hour(hour):
     """Return a relative traffic weight by hour of day — evenings peak, small-hours dip."""
-    # Rough daily shopping curve (0=midnight .. 23)
     curve = {
         0: 0.3, 1: 0.2, 2: 0.15, 3: 0.1, 4: 0.1, 5: 0.15,
         6: 0.3, 7: 0.5, 8: 0.7, 9: 0.9, 10: 1.0, 11: 1.0,
@@ -90,6 +89,26 @@ def generate_event():
     return event
 
 
+def corrupt_event(event):
+    """Deliberately break ~5% of events to exercise the validation layer."""
+    if random.random() < 0.05:  # 5% bad
+        corruption = random.choice([
+            "missing_field",
+            "negative_price",
+            "bad_event_type",
+            "null_user",
+        ])
+        if corruption == "missing_field":
+            event.pop("product_id", None)          # drop a required field
+        elif corruption == "negative_price":
+            event["price"] = -abs(event["price"])  # invalid negative price
+        elif corruption == "bad_event_type":
+            event["event_type"] = "UNKNOWN_ACTION" # not in allowed list
+        elif corruption == "null_user":
+            event["user_id"] = None                # null required field
+    return event
+
+
 def main():
     producer = KafkaProducer(
         bootstrap_servers=KAFKA_BROKER,
@@ -102,12 +121,7 @@ def main():
     try:
         while True:
             event = generate_event()
-
-            # Apply time-of-day shaping: occasionally skip an event in low-traffic hours
-            hour = datetime.now(timezone.utc).hour
-            if random.random() > traffic_multiplier_for_hour(hour) / 1.7:
-                # Skip some events when the hour's multiplier is low -> creates natural peaks/valleys
-                pass
+            event = corrupt_event(event)
 
             producer.send(TOPIC, key=event["session_id"], value=event)
             count += 1
